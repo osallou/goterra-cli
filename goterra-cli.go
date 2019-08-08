@@ -9,6 +9,8 @@ import (
 	terraModel "github.com/osallou/goterra-lib/lib/model"
 )
 
+var Version string
+
 // ShowUsage display base options
 func ShowUsage(options []string) {
 	fmt.Println("Usage:")
@@ -172,11 +174,18 @@ func main() {
 
 	var apiKey string
 	var url string
+	var showVersion bool
 
 	flag.StringVar(&apiKey, "apikey", "", "Authentication API Key")
 	flag.StringVar(&url, "url", "https://goterra.genouest.org", "URL to Goterra host")
+	flag.BoolVar(&showVersion, "version", false, "show client version")
 	flag.Usage = cliUsage
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("Version: %s\n", Version)
+		os.Exit(0)
+	}
 
 	if apiKey != "" {
 		options.APIKEY = apiKey
