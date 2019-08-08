@@ -244,12 +244,13 @@ func handleRun(options terraApi.OptionsDef, args []string) error {
 		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		runID := cmdOptions.String("id", "", "run id")
+		store := cmdOptions.Bool("store", false, "show store details (if deployed)")
 		cmdOptions.Parse(args[1:])
 
 		if *nsID == "" && *runID == "" {
 			return fmt.Errorf("missing run or namespace id")
 		}
-		err = terraApi.ShowRun(options, *nsID, *runID)
+		err = terraApi.ShowRun(options, *nsID, *runID, *store)
 		break
 	case "delete":
 		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)

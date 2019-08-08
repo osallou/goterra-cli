@@ -834,8 +834,35 @@ func ListRuns(options OptionsDef, nsID string) error {
 	return nil
 }
 
+// GetRunStore returns run deployment data in store
+func GetRunStore(options OptionsDef, id string) (*map[string]interface{}, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/store/%s", options.URL, id), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get application: %s", data["message"].(string))
+	}
+
+	var nsData map[string]interface{}
+	json.NewDecoder(nsResp.Body).Decode(&nsData)
+	return &nsData, nil
+}
+
 // ShowRun displays the run info
-func ShowRun(options OptionsDef, nsID string, id string) error {
+func ShowRun(options OptionsDef, nsID string, id string, store bool) error {
 
 	data, err := GetRun(options, nsID, id)
 
@@ -845,5 +872,17 @@ func ShowRun(options OptionsDef, nsID string, id string) error {
 	fmt.Printf("id: %s\n", data.ID.Hex())
 	yamlData, _ := yaml.Marshal(data)
 	fmt.Printf("%s\n", yamlData)
+
+	fmt.Println("Store data")
+	if data.Deployment == "" {
+		fmt.Println("\tno data")
+	} else {
+		storeData, errData := GetRunStore(options, data.Deployment)
+		if errData != nil {
+			return errData
+		}
+		yamlData, _ = yaml.Marshal(storeData)
+		fmt.Printf("%s\n", yamlData)
+	}
 	return nil
 }
