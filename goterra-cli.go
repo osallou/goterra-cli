@@ -115,13 +115,14 @@ func handleEndpoint(options terraApi.OptionsDef, args []string) error {
 		err = terraApi.ListEndpoints(options, *nsID)
 		break
 	case "show":
-		if len(args) == 1 {
-			return fmt.Errorf("missing endpoint id")
-		}
+
 		cmdOptions := flag.NewFlagSet("show options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		epID := cmdOptions.String("id", "", "endpoint id")
 		cmdOptions.Parse(args[1:])
+		if *nsID == "" && *epID == "" {
+			return fmt.Errorf("missing endpoint or namespace id")
+		}
 		err = terraApi.ShowEndpoint(options, *nsID, *epID)
 		break
 	}
@@ -166,14 +167,13 @@ func handleRecipe(options terraApi.OptionsDef, args []string) error {
 		err = terraApi.ListRecipes(options, *nsID)
 		break
 	case "show":
-		if len(args) == 1 {
-			return fmt.Errorf("missing recipe id")
-		}
 		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		recipeID := cmdOptions.String("id", "", "recipe id")
-
 		cmdOptions.Parse(args[1:])
+		if *nsID == "" && *recipeID == "" {
+			return fmt.Errorf("missing recipe or namespace id")
+		}
 		err = terraApi.ShowRecipe(options, *nsID, *recipeID)
 		break
 	}
@@ -191,14 +191,14 @@ func handleTemplate(options terraApi.OptionsDef, args []string) error {
 		err = terraApi.ListTemplates(options, *nsID)
 		break
 	case "show":
-		if len(args) == 1 {
-			return fmt.Errorf("missing template id")
-		}
 		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		templateID := cmdOptions.String("id", "", "template id")
-
 		cmdOptions.Parse(args[1:])
+
+		if *nsID == "" && *templateID == "" {
+			return fmt.Errorf("missing template or namespace id")
+		}
 		err = terraApi.ShowTemplate(options, *nsID, *templateID)
 		break
 	}
@@ -216,14 +216,14 @@ func handleApp(options terraApi.OptionsDef, args []string) error {
 		err = terraApi.ListApps(options, *nsID)
 		break
 	case "show":
-		if len(args) == 1 {
-			return fmt.Errorf("missing application id")
-		}
 		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		appID := cmdOptions.String("id", "", "application id")
-
 		cmdOptions.Parse(args[1:])
+
+		if *nsID == "" && *appID == "" {
+			return fmt.Errorf("missing app or namespace id")
+		}
 		err = terraApi.ShowApp(options, *nsID, *appID)
 		break
 	}
@@ -241,15 +241,28 @@ func handleRun(options terraApi.OptionsDef, args []string) error {
 		err = terraApi.ListRuns(options, *nsID)
 		break
 	case "show":
-		if len(args) == 1 {
-			return fmt.Errorf("missing run id")
-		}
 		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
-		appID := cmdOptions.String("id", "", "run id")
-
+		runID := cmdOptions.String("id", "", "run id")
 		cmdOptions.Parse(args[1:])
-		err = terraApi.ShowRun(options, *nsID, *appID)
+
+		if *nsID == "" && *runID == "" {
+			return fmt.Errorf("missing run or namespace id")
+		}
+		err = terraApi.ShowRun(options, *nsID, *runID)
+		break
+	case "delete":
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		runID := cmdOptions.String("id", "", "run id")
+		cmdOptions.Parse(args[1:])
+		if *nsID == "" && *runID == "" {
+			return fmt.Errorf("missing run or namespace id")
+		}
+		confirm := promptConfirm("Please confirm deletion")
+		if confirm {
+			terraApi.DeleteRun(options, *nsID, *runID)
+		}
 		break
 	}
 	return err
@@ -312,6 +325,7 @@ func runUsage() {
 	fmt.Println("User sub commands:")
 	fmt.Println(" * list: list runs")
 	fmt.Println(" * show ID: show run info ")
+	fmt.Println(" * delete ID: ask to stop run ")
 }
 
 func promptConfirm(question string) bool {

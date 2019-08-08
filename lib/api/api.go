@@ -791,6 +791,34 @@ func GetRun(options OptionsDef, nsID, id string) (*terraModel.Run, error) {
 	return &nsData, nil
 }
 
+// DeleteRun ask for run termination
+func DeleteRun(options OptionsDef, nsID string, id string) error {
+	client := http.Client{}
+
+	nsReq, authReqErr := http.NewRequest("DELETE", fmt.Sprintf("%s/deploy/ns/%s/run/%s", options.URL, nsID, id), nil)
+
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if authReqErr != nil {
+		return authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return fmt.Errorf("Failed to get applications: %s", data["message"].(string))
+	}
+
+	return nil
+}
+
 // ListRuns list the user runs
 func ListRuns(options OptionsDef, nsID string) error {
 	data, err := GetRuns(options, nsID)
