@@ -9,6 +9,7 @@ import (
 	terraModel "github.com/osallou/goterra-lib/lib/model"
 )
 
+// Version is client version
 var Version string
 
 // ShowUsage display base options
@@ -229,6 +230,31 @@ func handleApp(options terraApi.OptionsDef, args []string) error {
 	return err
 }
 
+func handleRun(options terraApi.OptionsDef, args []string) error {
+	var err error
+
+	switch args[0] {
+	case "list":
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ListRuns(options, *nsID)
+		break
+	case "show":
+		if len(args) == 1 {
+			return fmt.Errorf("missing run id")
+		}
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		appID := cmdOptions.String("id", "", "run id")
+
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ShowRun(options, *nsID, *appID)
+		break
+	}
+	return err
+}
+
 type nsData terraModel.NSData
 
 func cliUsage() {
@@ -240,6 +266,7 @@ func cliUsage() {
 	fmt.Printf(" * template\n")
 	fmt.Printf(" * app\n")
 	fmt.Printf(" * user\n")
+	fmt.Printf(" * run\n")
 }
 
 func nsUsage() {
@@ -279,6 +306,12 @@ func appUsage() {
 	fmt.Println("User sub commands:")
 	fmt.Println(" * list: list applications")
 	fmt.Println(" * show ID: show application info ")
+}
+
+func runUsage() {
+	fmt.Println("User sub commands:")
+	fmt.Println(" * list: list runs")
+	fmt.Println(" * show ID: show run info ")
 }
 
 func promptConfirm(question string) bool {
@@ -386,6 +419,13 @@ func main() {
 			os.Exit(1)
 		}
 		err = handleApp(options, args[1:])
+		break
+	case "run":
+		if len(args) == 1 {
+			runUsage()
+			os.Exit(1)
+		}
+		err = handleRun(options, args[1:])
 		break
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])

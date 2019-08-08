@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"gopkg.in/yaml.v2"
 
@@ -495,9 +496,9 @@ func GetRecipes(options OptionsDef, id string) ([]terraModel.Recipe, error) {
 }
 
 // GetRecipe returns selected ns
-func GetRecipe(options OptionsDef, nsID, id string) (*terraModel.Recipe, error) {
+func GetRecipe(options OptionsDef, nsID string, id string) (*terraModel.Recipe, error) {
 	client := http.Client{}
-	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/recipe/%s", options.URL, id, id), nil)
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/recipe/%s", options.URL, nsID, id), nil)
 	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
 	nsReq.Header.Add("Content-Type", "application/json")
 	if authReqErr != nil {
@@ -584,9 +585,9 @@ func GetTemplates(options OptionsDef, id string) ([]terraModel.Template, error) 
 }
 
 // GetTemplate returns selected template
-func GetTemplate(options OptionsDef, nsID, id string) (*terraModel.Template, error) {
+func GetTemplate(options OptionsDef, nsID string, id string) (*terraModel.Template, error) {
 	client := http.Client{}
-	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/template/%s", options.URL, id, id), nil)
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/template/%s", options.URL, nsID, id), nil)
 	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
 	nsReq.Header.Add("Content-Type", "application/json")
 	if authReqErr != nil {
@@ -640,8 +641,6 @@ func ShowTemplate(options OptionsDef, nsID string, id string) error {
 	return nil
 }
 
-// *********************************
-
 // GetApps returns apps for namespace or public apps if id is empty
 func GetApps(options OptionsDef, id string) ([]terraModel.Application, error) {
 	client := http.Client{}
@@ -675,9 +674,9 @@ func GetApps(options OptionsDef, id string) ([]terraModel.Application, error) {
 }
 
 // GetApp returns selected template
-func GetApp(options OptionsDef, nsID, id string) (*terraModel.Application, error) {
+func GetApp(options OptionsDef, nsID string, id string) (*terraModel.Application, error) {
 	client := http.Client{}
-	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/app/%s", options.URL, id, id), nil)
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/app/%s", options.URL, nsID, id), nil)
 	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
 	nsReq.Header.Add("Content-Type", "application/json")
 	if authReqErr != nil {
@@ -721,6 +720,96 @@ func ListApps(options OptionsDef, nsID string) error {
 func ShowApp(options OptionsDef, nsID string, id string) error {
 
 	data, err := GetApp(options, nsID, id)
+
+	if err != nil {
+		return err
+	}
+	fmt.Printf("id: %s\n", data.ID.Hex())
+	yamlData, _ := yaml.Marshal(data)
+	fmt.Printf("%s\n", yamlData)
+	return nil
+}
+
+// *******************
+
+// GetRuns returns user runs
+func GetRuns(options OptionsDef, id string) ([]terraModel.Run, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/run", options.URL), nil)
+	if id != "" {
+		nsReq, authReqErr = http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/run", options.URL, id), nil)
+	}
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get applications: %s", data["message"].(string))
+	}
+
+	var nsResult map[string][]terraModel.Run
+	json.NewDecoder(nsResp.Body).Decode(&nsResult)
+	data := nsResult["runs"]
+	return data, nil
+}
+
+// GetRun returns selected run
+func GetRun(options OptionsDef, nsID, id string) (*terraModel.Run, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/run/%s", options.URL, nsID, id), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get application: %s", data["message"].(string))
+	}
+
+	var nsData terraModel.Run
+	json.NewDecoder(nsResp.Body).Decode(&nsData)
+	return &nsData, nil
+}
+
+// ListRuns list the user runs
+func ListRuns(options OptionsDef, nsID string) error {
+	data, err := GetRuns(options, nsID)
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, '\t', tabwriter.AlignRight|tabwriter.Debug)
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", "ID", "Name", "Status", "Start", "End", "Namespace")
+	for _, ep := range data {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", ep.ID.Hex(), ep.Name, ep.Status, time.Unix(ep.Start, 0), time.Unix(ep.End, 0), ep.Namespace)
+	}
+	w.Flush()
+	return nil
+}
+
+// ShowRun displays the run info
+func ShowRun(options OptionsDef, nsID string, id string) error {
+
+	data, err := GetRun(options, nsID, id)
 
 	if err != nil {
 		return err
