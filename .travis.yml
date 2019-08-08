@@ -18,3 +18,15 @@ script:
 - if [ "${LATEST}" = "true" ]; then GOOS=windows GOARCH=amd64 go build -ldflags "-X
   main.Version=`git rev-parse --short HEAD`" -o goterra.windows.amd64.exe goterra-cli.go;
   fi
+deploy:
+  provider: releases
+  skip_cleanup: true
+  api_key:
+    secure: i6wiu0nseNKWzGSIQjSwuJfwknymmaLmOQLz9QNYzSihhPE9gYXCf675aWs1d5VgjWQu5lQ7T4uDyzTcUf/IgF+Vqq/iInyEhqit9W83v72LepHBJVZYT7Mln2ZQ+ofiwJvQRaw9qoummiutKzdA6BZ+t1k1ZCvDAqC1UZ9Oyguy2+K7BBSMdF6a0yFb53HhEyekHUWhXHdOXSqQZIrItG9ZzyGVfgpHYOZYX0aOEZQmoa97zCZ2bfppK6fwk1gCovG2VCiU52Sm1QHkizCIoWKUNXPsgXosecQ6wLVKagi9iUqo8yqwGM/ZdC/XX5lqXyZrxhqXGVyuzbwzPx+zBCQy552kWAIA/5Vy7fozvHu60K+Pepan4BxQEmK6OiAKh8qX2mEUXzMXWOc+wN32YXLyihHtd1MfMi3xNxicRabkYR3OZG+LwLpMeypZI/m0a+ECTPrgaWuOwJzFF+ur5WuSsj0dq+HkPB69x/B47HPjD6zX15PD83umptE8LGDVjKyDoYM4xmW15DDBKU4vi3oLRxuTNFAl0DQj6zIN5RfByOrf1krf+JlZdO9WJf+eTmFg/sJTX9XxarN18cJ1UdUfvP1gCFrC9UJdtC3dXQeDpuuc/iII8zfj/maRN6EgchIup7OOvaZ3dDHuMb/dxNkkj13Smsyl5O6QLjIGjDk=
+  file:
+    - goterra.linux.amd64
+    - goterra.darwin.amd64
+    - goterra.windows.amd64.exe
+  on:
+    repo: osallou/goterra-cli
+    tags: true
