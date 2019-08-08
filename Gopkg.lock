@@ -3,14 +3,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:13b74dee81dff7297738e2f686eae71775fa8db9aadf0c00b86b345ac89083ca"
+  digest = "1:c6b6ed355fc1d48b8676f24f9dca66d1c1b8f34e919d830145ac124acc9bbcac"
   name = "github.com/osallou/goterra-lib"
   packages = [
     "lib/model",
     "lib/user",
   ]
   pruneopts = "UT"
-  revision = "c1c266d2a1f1b20e1d3a27b62c6f9207fd693fab"
+  revision = "5b36a3529765a0faa83fc326bda5e5a445fc02e3"
 
 [[projects]]
   digest = "1:1cabe44fb226a08664539c7ff79f25940284d9e2116187a74c90472a51c257ca"
@@ -20,12 +20,21 @@
   revision = "0d1270edf53072da4da781b76d2e1db58831152f"
   version = "v1.0.4"
 
+[[projects]]
+  digest = "1:4d2e5a73dc1500038e504a8d78b986630e3626dc027bc030ba5c75da257cdb96"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "51d6538a90f86fe93ac480b35f37b2be17fef232"
+  version = "v2.2.2"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
     "github.com/osallou/goterra-lib/lib/model",
     "github.com/osallou/goterra-lib/lib/user",
+    "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

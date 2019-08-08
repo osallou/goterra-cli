@@ -64,7 +64,7 @@ func handleNamespace(options terraApi.OptionsDef, args []string) error {
 
 	switch args[0] {
 	case "list":
-		cmdOptions := flag.NewFlagSet("edit options", flag.ExitOnError)
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		showAll := cmdOptions.Bool("all", false, "Get all namespaces [admin]")
 		cmdOptions.Parse(args[1:])
 		err = terraApi.ListNamespaces(options, *showAll)
@@ -88,8 +88,17 @@ func handleNamespace(options terraApi.OptionsDef, args []string) error {
 		ns := terraModel.NSData{
 			Name: args[1],
 		}
-
 		terraApi.CreateNamespace(options, &ns)
+		break
+	case "delete":
+		if len(args) == 1 {
+			return fmt.Errorf("missing namespace name")
+		}
+		confirm := promptConfirm("Please confirm deletion")
+		if confirm {
+			terraApi.DeleteNamespace(options, args[1])
+		}
+		break
 	}
 	return err
 }
@@ -99,7 +108,7 @@ func handleEndpoint(options terraApi.OptionsDef, args []string) error {
 
 	switch args[0] {
 	case "list":
-		cmdOptions := flag.NewFlagSet("edit options", flag.ExitOnError)
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		cmdOptions.Parse(args[1:])
 		err = terraApi.ListEndpoints(options, *nsID)
@@ -108,7 +117,7 @@ func handleEndpoint(options terraApi.OptionsDef, args []string) error {
 		if len(args) == 1 {
 			return fmt.Errorf("missing endpoint id")
 		}
-		cmdOptions := flag.NewFlagSet("edit options", flag.ExitOnError)
+		cmdOptions := flag.NewFlagSet("show options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		epID := cmdOptions.String("id", "", "endpoint id")
 		cmdOptions.Parse(args[1:])
@@ -131,6 +140,91 @@ func handleUser(options terraApi.OptionsDef, args []string) error {
 		}
 		err = terraApi.ShowUser(options, args[1])
 		break
+	case "password":
+		if len(args) != 3 {
+			return fmt.Errorf("missing user id or password, usage: goterra user password USERID NEWPASSWORD")
+		}
+		err = terraApi.SetUserPassword(options, args[1], args[2])
+		if err != nil {
+			fmt.Printf("Password updated for user %s\n", args[1])
+		}
+		break
+	}
+
+	return err
+}
+
+func handleRecipe(options terraApi.OptionsDef, args []string) error {
+	var err error
+
+	switch args[0] {
+	case "list":
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ListRecipes(options, *nsID)
+		break
+	case "show":
+		if len(args) == 1 {
+			return fmt.Errorf("missing recipe id")
+		}
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		recipeID := cmdOptions.String("id", "", "recipe id")
+
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ShowRecipe(options, *nsID, *recipeID)
+		break
+	}
+	return err
+}
+
+func handleTemplate(options terraApi.OptionsDef, args []string) error {
+	var err error
+
+	switch args[0] {
+	case "list":
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ListTemplates(options, *nsID)
+		break
+	case "show":
+		if len(args) == 1 {
+			return fmt.Errorf("missing template id")
+		}
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		templateID := cmdOptions.String("id", "", "template id")
+
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ShowTemplate(options, *nsID, *templateID)
+		break
+	}
+	return err
+}
+
+func handleApp(options terraApi.OptionsDef, args []string) error {
+	var err error
+
+	switch args[0] {
+	case "list":
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ListApps(options, *nsID)
+		break
+	case "show":
+		if len(args) == 1 {
+			return fmt.Errorf("missing application id")
+		}
+		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		appID := cmdOptions.String("id", "", "application id")
+
+		cmdOptions.Parse(args[1:])
+		err = terraApi.ShowApp(options, *nsID, *appID)
+		break
 	}
 	return err
 }
@@ -142,6 +236,9 @@ func cliUsage() {
 	fmt.Printf("Subcommands:\n")
 	fmt.Printf(" * namespace\n")
 	fmt.Printf(" * endpoint\n")
+	fmt.Printf(" * recipe\n")
+	fmt.Printf(" * template\n")
+	fmt.Printf(" * app\n")
 	fmt.Printf(" * user\n")
 }
 
@@ -151,6 +248,7 @@ func nsUsage() {
 	fmt.Println(" * show NSID: show namespace NSID in details")
 	fmt.Println(" * edit NSID: update namespace NSID info, see -h")
 	fmt.Println(" * create NSNAME: creates a new user namespace")
+	fmt.Println(" * delete NSID: removes namespace")
 }
 
 func endpointUsage() {
@@ -161,6 +259,36 @@ func endpointUsage() {
 func userUsage() {
 	fmt.Println("User sub commands:")
 	fmt.Println(" * list: list users [admin]")
+	fmt.Println(" * show UID: show user info [user or admin]")
+	fmt.Println(" * password UID XXX: modify user password [user or admin]")
+}
+
+func recipeUsage() {
+	fmt.Println("User sub commands:")
+	fmt.Println(" * list: list recipes")
+	fmt.Println(" * show ID: show recipe info ")
+}
+
+func templateUsage() {
+	fmt.Println("User sub commands:")
+	fmt.Println(" * list: list templates")
+	fmt.Println(" * show ID: show template info ")
+}
+
+func appUsage() {
+	fmt.Println("User sub commands:")
+	fmt.Println(" * list: list applications")
+	fmt.Println(" * show ID: show application info ")
+}
+
+func promptConfirm(question string) bool {
+	fmt.Print(question + "[y/n]:")
+	var input string
+	fmt.Scanln(&input)
+	if input == "y" {
+		return true
+	}
+	return false
 }
 
 func main() {
@@ -237,6 +365,27 @@ func main() {
 			os.Exit(1)
 		}
 		err = handleUser(options, args[1:])
+		break
+	case "recipe":
+		if len(args) == 1 {
+			recipeUsage()
+			os.Exit(1)
+		}
+		err = handleRecipe(options, args[1:])
+		break
+	case "template":
+		if len(args) == 1 {
+			templateUsage()
+			os.Exit(1)
+		}
+		err = handleTemplate(options, args[1:])
+		break
+	case "app":
+		if len(args) == 1 {
+			appUsage()
+			os.Exit(1)
+		}
+		err = handleApp(options, args[1:])
 		break
 	default:
 		fmt.Printf("Unknown command: %s\n", os.Args[1])

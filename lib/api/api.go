@@ -9,6 +9,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"gopkg.in/yaml.v2"
+
 	terraModel "github.com/osallou/goterra-lib/lib/model"
 	terraUser "github.com/osallou/goterra-lib/lib/user"
 )
@@ -140,16 +142,9 @@ func ShowNamespace(options OptionsDef, nsID string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("ID: %s\n", data.ID.Hex())
-	fmt.Printf("Name: %s\n", data.Name)
-	fmt.Println("Owners:")
-	for _, owner := range data.Owners {
-		fmt.Printf("\t%s\n", owner)
-	}
-	fmt.Println("Members:")
-	for _, member := range data.Members {
-		fmt.Printf("\t%s\n", member)
-	}
+	fmt.Printf("id: %s\n", data.ID.Hex())
+	yamlData, _ := yaml.Marshal(data)
+	fmt.Printf("%s\n", yamlData)
 	return nil
 }
 
@@ -207,6 +202,31 @@ func UpdateNamespace(options OptionsDef, ns *terraModel.NSData) error {
 		var data map[string]interface{}
 		json.NewDecoder(nsResp.Body).Decode(&data)
 		return fmt.Errorf("Failed to update namespace: %s", data["message"].(string))
+	}
+
+	return nil
+}
+
+// DeleteNamespace removes namespace
+func DeleteNamespace(options OptionsDef, nsID string) error {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("DELETE", fmt.Sprintf("%s/deploy/ns/%s", options.URL, nsID), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return fmt.Errorf("Failed to delete namespace: %s", data["message"].(string))
 	}
 
 	return nil
@@ -323,20 +343,10 @@ func ShowEndpoint(options OptionsDef, nsID string, epID string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("ID: %s\n", data.ID.Hex())
-	fmt.Printf("Name: %s\n", data.Name)
-	fmt.Println("Config:")
-	for key, value := range data.Config {
-		fmt.Printf("\t%s: %s\n", key, value)
-	}
-	fmt.Println("Features:")
-	for key, value := range data.Features {
-		fmt.Printf("\t%s: %s\n", key, value)
-	}
-	fmt.Println("Inputs:")
-	for key, value := range data.Inputs {
-		fmt.Printf("\t%s: %s\n", key, value)
-	}
+	fmt.Printf("id: %s\n", data.ID.Hex())
+	yamlData, _ := yaml.Marshal(data)
+	fmt.Printf("%s\n", yamlData)
+
 	return nil
 }
 
@@ -418,13 +428,305 @@ func ShowUser(options OptionsDef, userID string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("ID: %s\n", data.UID)
-	fmt.Printf("Kind: %s\n", data.Kind)
-	fmt.Printf("Admin: %t\n", data.Admin)
-	fmt.Printf("Super user: %t\n", data.SuperUser)
-	fmt.Printf("Email: %s\n", data.Email)
-	fmt.Printf("API key: %s\n", data.APIKey)
-	fmt.Printf("SSH public key: %s\n", data.SSHPubKey)
+	data.Password = "*****"
+	yamlData, _ := yaml.Marshal(data)
+	fmt.Printf("%s\n", yamlData)
 
+	return nil
+}
+
+// SetUserPassword modifies user password
+func SetUserPassword(options OptionsDef, userID string, password string) error {
+	passwordInfo := make(map[string]string)
+	passwordInfo["password"] = password
+	data, _ := json.Marshal(passwordInfo)
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("PUT", fmt.Sprintf("%s/auth/user/%s/password", options.URL, userID), bytes.NewBuffer(data))
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return fmt.Errorf("Failed to update user password: %s", data["message"].(string))
+	}
+	return nil
+}
+
+// GetRecipes returns recipes for namespace or public recipes if id is empty
+func GetRecipes(options OptionsDef, id string) ([]terraModel.Recipe, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/recipes", options.URL), nil)
+	if id != "" {
+		nsReq, authReqErr = http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/endpoint", options.URL, id), nil)
+	}
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get endpoints: %s", data["message"].(string))
+	}
+
+	var nsResult map[string][]terraModel.Recipe
+	json.NewDecoder(nsResp.Body).Decode(&nsResult)
+	data := nsResult["recipes"]
+	return data, nil
+}
+
+// GetRecipe returns selected ns
+func GetRecipe(options OptionsDef, nsID, id string) (*terraModel.Recipe, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/recipe/%s", options.URL, id, id), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get namespace: %s", data["message"].(string))
+	}
+
+	var nsResult map[string]terraModel.Recipe
+	json.NewDecoder(nsResp.Body).Decode(&nsResult)
+	nsData := nsResult["recipe"]
+	return &nsData, nil
+}
+
+// ListRecipes list the recipes
+func ListRecipes(options OptionsDef, nsID string) error {
+	data, err := GetRecipes(options, nsID)
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, '\t', tabwriter.AlignRight|tabwriter.Debug)
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "ID", "Name", "Description", "Public", "Namespace")
+	for _, ep := range data {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%s\n", ep.ID.Hex(), ep.Name, ep.Description, ep.Public, ep.Namespace)
+	}
+	w.Flush()
+	return nil
+}
+
+// ShowRecipe displays the recipe
+func ShowRecipe(options OptionsDef, nsID string, id string) error {
+
+	data, err := GetRecipe(options, nsID, id)
+
+	if err != nil {
+		return err
+	}
+	fmt.Printf("id: %s\n", data.ID.Hex())
+	yamlData, _ := yaml.Marshal(data)
+	fmt.Printf("%s\n", yamlData)
+	return nil
+}
+
+// GetTemplates returns templates for namespace or public templates if id is empty
+func GetTemplates(options OptionsDef, id string) ([]terraModel.Template, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/templates", options.URL), nil)
+	if id != "" {
+		nsReq, authReqErr = http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/template", options.URL, id), nil)
+	}
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get templates: %s", data["message"].(string))
+	}
+
+	var nsResult map[string][]terraModel.Template
+	json.NewDecoder(nsResp.Body).Decode(&nsResult)
+	data := nsResult["templates"]
+	return data, nil
+}
+
+// GetTemplate returns selected template
+func GetTemplate(options OptionsDef, nsID, id string) (*terraModel.Template, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/template/%s", options.URL, id, id), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get namespace: %s", data["message"].(string))
+	}
+
+	var nsResult map[string]terraModel.Template
+	json.NewDecoder(nsResp.Body).Decode(&nsResult)
+	nsData := nsResult["template"]
+	return &nsData, nil
+}
+
+// ListTemplates list the templates
+func ListTemplates(options OptionsDef, nsID string) error {
+	data, err := GetTemplates(options, nsID)
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, '\t', tabwriter.AlignRight|tabwriter.Debug)
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "ID", "Name", "Description", "Public", "Namespace")
+	for _, ep := range data {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%s\n", ep.ID.Hex(), ep.Name, ep.Description, ep.Public, ep.Namespace)
+	}
+	w.Flush()
+	return nil
+}
+
+// ShowTemplate displays the template
+func ShowTemplate(options OptionsDef, nsID string, id string) error {
+
+	data, err := GetTemplate(options, nsID, id)
+
+	if err != nil {
+		return err
+	}
+	fmt.Printf("id: %s\n", data.ID.Hex())
+	yamlData, _ := yaml.Marshal(data)
+	fmt.Printf("%s\n", yamlData)
+	return nil
+}
+
+// *********************************
+
+// GetApps returns apps for namespace or public apps if id is empty
+func GetApps(options OptionsDef, id string) ([]terraModel.Application, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/apps", options.URL), nil)
+	if id != "" {
+		nsReq, authReqErr = http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/app", options.URL, id), nil)
+	}
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get applications: %s", data["message"].(string))
+	}
+
+	var nsResult map[string][]terraModel.Application
+	json.NewDecoder(nsResp.Body).Decode(&nsResult)
+	data := nsResult["apps"]
+	return data, nil
+}
+
+// GetApp returns selected template
+func GetApp(options OptionsDef, nsID, id string) (*terraModel.Application, error) {
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/app/%s", options.URL, id, id), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return nil, authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get application: %s", data["message"].(string))
+	}
+
+	var nsResult map[string]terraModel.Application
+	json.NewDecoder(nsResp.Body).Decode(&nsResult)
+	nsData := nsResult["app"]
+	return &nsData, nil
+}
+
+// ListApps list the applications
+func ListApps(options OptionsDef, nsID string) error {
+	data, err := GetApps(options, nsID)
+	if err != nil {
+		return err
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, '\t', tabwriter.AlignRight|tabwriter.Debug)
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", "ID", "Name", "Description", "Public", "Namespace")
+	for _, ep := range data {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%t\t%s\n", ep.ID.Hex(), ep.Name, ep.Description, ep.Public, ep.Namespace)
+	}
+	w.Flush()
+	return nil
+}
+
+// ShowApp displays the application
+func ShowApp(options OptionsDef, nsID string, id string) error {
+
+	data, err := GetApp(options, nsID, id)
+
+	if err != nil {
+		return err
+	}
+	fmt.Printf("id: %s\n", data.ID.Hex())
+	yamlData, _ := yaml.Marshal(data)
+	fmt.Printf("%s\n", yamlData)
 	return nil
 }
