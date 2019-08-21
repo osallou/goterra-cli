@@ -29,6 +29,8 @@ func handleEditNamespace(options terraApi.OptionsDef, nsID string, args []string
 	addMember := cmdOptions.String("add-member", "", "Add a member")
 	removeOwner := cmdOptions.String("remove-owner", "", "Remove an owner")
 	removeMember := cmdOptions.String("remove-member", "", "Remove a member")
+	freeze := cmdOptions.Bool("freeze", false, "freeze namespace")
+	unfreeze := cmdOptions.Bool("unfreeze", false, "unfreeze namespace")
 	if len(args) == 0 {
 		cmdOptions.PrintDefaults()
 		return nil
@@ -51,6 +53,12 @@ func handleEditNamespace(options terraApi.OptionsDef, nsID string, args []string
 	}
 	if *removeMember != "" {
 		ns.Members = terraApi.RemoveFromList(ns.Members, *removeMember)
+	}
+	if *freeze == true {
+		ns.Freeze = true
+	}
+	if *unfreeze == true {
+		ns.Freeze = false
 	}
 	err = terraApi.UpdateNamespace(options, ns)
 	if err != nil {
