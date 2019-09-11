@@ -7,6 +7,7 @@ import (
 
 	terraApi "github.com/osallou/goterra-cli/lib/api"
 	terraModel "github.com/osallou/goterra-lib/lib/model"
+	terraUser "github.com/osallou/goterra-lib/lib/user"
 )
 
 // Version is client version
@@ -123,7 +124,6 @@ func handleEndpoint(options terraApi.OptionsDef, args []string) error {
 		err = terraApi.ListEndpoints(options, *nsID)
 		break
 	case "show":
-
 		cmdOptions := flag.NewFlagSet("show options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
 		epID := cmdOptions.String("id", "", "endpoint id")
@@ -157,6 +157,29 @@ func handleUser(options terraApi.OptionsDef, args []string) error {
 		err = terraApi.SetUserPassword(options, args[1], args[2])
 		if err != nil {
 			fmt.Printf("Password updated for user %s\n", args[1])
+		}
+		break
+	case "create":
+		cmdOptions := flag.NewFlagSet("show options", flag.ExitOnError)
+		userID := cmdOptions.String("id", "", "user id")
+		userPassword := cmdOptions.String("password", "", "password")
+		userAdmin := cmdOptions.Bool("admin", false, "has admin rights")
+		userSuper := cmdOptions.Bool("super", false, "has super user rights")
+		userKind := cmdOptions.String("kind", "", "kind of user (google, local, aai, etc.)")
+		cmdOptions.Parse(args[1:])
+		if *userKind == "local" {
+			*userKind = ""
+		}
+		newUser := &terraUser.User{
+			UID:       *userID,
+			Password:  *userPassword,
+			Admin:     *userAdmin,
+			SuperUser: *userSuper,
+			Kind:      *userKind,
+		}
+		err := terraApi.CreateUser(options, newUser)
+		if err == nil {
+			fmt.Printf("User %s created\n", *userID)
 		}
 		break
 	}
@@ -242,6 +265,25 @@ func handleRun(options terraApi.OptionsDef, args []string) error {
 	var err error
 
 	switch args[0] {
+	case "start":
+		cmdOptions := flag.NewFlagSet("start options", flag.ExitOnError)
+		nsID := cmdOptions.String("ns", "", "namespace id")
+		endpointID := cmdOptions.String("endpoint", "", "endpoint id")
+		appID := cmdOptions.String("app", "", "application id")
+		name := cmdOptions.String("name", "", "name of the run")
+		template := cmdOptions.Bool("template", false, "dry-run, generate param template file")
+		params := cmdOptions.String("params", "", "parameter file")
+		cmdOptions.Parse(args[1:])
+		if *name == "" || *nsID == "" || *endpointID == "" || *appID == "" {
+			return fmt.Errorf("Missing argument name, ns, endpoint or app")
+
+		}
+		var runID string
+		runID, err = terraApi.StartRun(options, *name, *nsID, *endpointID, *appID, *params, *template)
+		if runID != "" {
+			fmt.Printf("New run started, id: %s\n", runID)
+		}
+		break
 	case "list":
 		cmdOptions := flag.NewFlagSet("list options", flag.ExitOnError)
 		nsID := cmdOptions.String("ns", "", "namespace id")
@@ -332,6 +374,7 @@ func appUsage() {
 
 func runUsage() {
 	fmt.Println("User sub commands:")
+	fmt.Println(" * start: launch a run")
 	fmt.Println(" * list: list runs")
 	fmt.Println(" * show ID: show run info ")
 	fmt.Println(" * delete ID: ask to stop run ")

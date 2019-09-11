@@ -1,9 +1,11 @@
 package goterraapi
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -32,6 +34,34 @@ type OptionsDef struct {
 	APIKEY string
 	URL    string
 	Token  string
+}
+
+// CreateUser creates a new user
+func CreateUser(options OptionsDef, user *terraUser.User) error {
+	data, dataErr := json.Marshal(user)
+	if dataErr != nil {
+		return dataErr
+	}
+	client := http.Client{}
+	nsReq, authReqErr := http.NewRequest("POST", fmt.Sprintf("%s/auth/register", options.URL), bytes.NewBuffer(data))
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+	if authReqErr != nil {
+		return authReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return authReqErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return fmt.Errorf("Failed to create user: %s", data["message"].(string))
+	}
+	return nil
 }
 
 // Login authenticate users and return a token
@@ -371,7 +401,7 @@ func GetUsers(options OptionsDef) ([]terraUser.User, error) {
 	if nsResp.StatusCode != 200 {
 		var data map[string]interface{}
 		json.NewDecoder(nsResp.Body).Decode(&data)
-		return nil, fmt.Errorf("Failed to get endpoints: %s", data["message"].(string))
+		return nil, fmt.Errorf("Failed to get users: %s", data["message"].(string))
 	}
 
 	var nsResult map[string][]terraUser.User
@@ -731,6 +761,272 @@ func ShowApp(options OptionsDef, nsID string, id string) error {
 }
 
 // *******************
+func appInputs(options OptionsDef, nsID string, appID string) (map[string]interface{}, error) {
+	client := http.Client{}
+
+	nsReq, runReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/app/%s/inputs", options.URL, nsID, appID), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if runReqErr != nil {
+		return nil, runReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, nsRespErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get application inputs: %s", data["message"].(string))
+	}
+
+	var res map[string]map[string]interface{}
+	json.NewDecoder(nsResp.Body).Decode(&res)
+	inputs := res["app"]
+
+	//respData, _ := ioutil.ReadAll(nsResp.Body)
+	//fmt.Printf("app inputs: %s", respData)
+	return inputs, nil
+
+}
+
+func endpointDefaultInputs(options OptionsDef, nsID string, endpointID string) (map[string][]string, error) {
+	client := http.Client{}
+	nsReq, runReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/endpoint/%s/defaults", options.URL, nsID, endpointID), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if runReqErr != nil {
+		return nil, runReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return nil, nsRespErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		return nil, fmt.Errorf("Failed to get endpoint defaults: %s", data["message"].(string))
+	}
+	var endpointDefaults map[string]map[string][]string
+	json.NewDecoder(nsResp.Body).Decode(&endpointDefaults)
+	return endpointDefaults["defaults"], nil
+}
+
+func promptUser(label string) string {
+	fmt.Printf("%s: ", label)
+	reader := bufio.NewReader(os.Stdin)
+	text, _ := reader.ReadString('\n')
+	text = strings.Replace(text, "\n", "", -1)
+	return text
+}
+
+// RunInputs contains run input parameters
+type RunInputs struct {
+	Params map[string]string `yaml:"params"`
+}
+
+func hasSecret(options OptionsDef, nsID string, endpointID string) bool {
+	client := http.Client{}
+	nsReq, runReqErr := http.NewRequest("GET", fmt.Sprintf("%s/deploy/ns/%s/endpoint/%s/secret", options.URL, nsID, endpointID), nil)
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if runReqErr != nil {
+
+		return false
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return false
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 200 {
+		return false
+	}
+	return true
+}
+
+func runRun(options OptionsDef, run terraModel.Run) (string, error) {
+	client := http.Client{}
+	data, _ := json.Marshal(run)
+	fmt.Printf("Run %+v\n", run)
+	fmt.Printf("%s/deploy/ns/%s/run/%s\n", options.URL, run.Endpoint, run.AppID)
+	nsReq, runReqErr := http.NewRequest("POST", fmt.Sprintf("%s/deploy/ns/%s/run/%s", options.URL, run.Namespace, run.AppID), bytes.NewBuffer(data))
+	nsReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", options.Token))
+	nsReq.Header.Add("Content-Type", "application/json")
+
+	if runReqErr != nil {
+		return "", runReqErr
+
+	}
+	nsResp, nsRespErr := client.Do(nsReq)
+	if nsRespErr != nil {
+		return "", nsRespErr
+
+	}
+	defer nsResp.Body.Close()
+	if nsResp.StatusCode != 201 {
+		var data map[string]interface{}
+		json.NewDecoder(nsResp.Body).Decode(&data)
+		fmt.Printf("### %d, %+v", nsResp.StatusCode, data)
+		return "", fmt.Errorf("Failed to run application: %s", data["message"].(string))
+	}
+	var runRespData map[string]string
+	json.NewDecoder(nsResp.Body).Decode(&runRespData)
+
+	return runRespData["run"], nil
+}
+
+// StartRun exec a run
+func StartRun(options OptionsDef, name string, nsID string, endpointID string, appID string, params string, template bool) (string, error) {
+	paramData := make(map[string]string)
+
+	hasSecret := hasSecret(options, nsID, endpointID)
+	if !hasSecret {
+		return "", fmt.Errorf("no known secret for this endpoint, please create one first")
+	}
+
+	if params == "" {
+
+		endpointInfo, _ := GetEndpoint(options, nsID, endpointID)
+
+		inputs, inputsErr := appInputs(options, nsID, appID)
+		if inputsErr != nil {
+			return "", inputsErr
+		}
+
+		endpointDefaultInputParams, endpointDefaultInputError := endpointDefaultInputs(options, nsID, endpointID)
+
+		var defaultInputs map[string]interface{}
+		defaultInputs = inputs["defaults"].(map[string]interface{})
+		templateInputs := inputs["template"].(map[string]interface{})
+		fmt.Println("Template parameters:")
+		for param, paramLabel := range templateInputs {
+			paramData[param] = ""
+			// fmt.Printf("%s ?\n", paramLabel.(string))
+			defaults, ok := defaultInputs[param]
+			if ok {
+				if len(defaults.([]string)) == 1 {
+					fmt.Printf("Default: %s\n", defaults.([]string)[0])
+					paramData[param] = defaults.([]string)[0]
+				} else {
+					fmt.Printf("Choices: %s\n", strings.Join(defaults.([]string), ","))
+				}
+			}
+			if endpointDefaultInputError == nil {
+				// fmt.Printf("has default? %s, %+v", param, endpointDefaultInputParams)
+				epDefaults, ok := endpointDefaultInputParams[param]
+				if ok {
+					if len(epDefaults) == 1 {
+						fmt.Printf("Default: %s\n", epDefaults[0])
+						paramData[param] = epDefaults[0]
+					} else {
+						fmt.Printf("Choices: %s\n", strings.Join(epDefaults, ","))
+					}
+				}
+			}
+			if paramData[param] == "" {
+				paramData[param] = promptUser(paramLabel.(string))
+			}
+		}
+		fmt.Println("Recipe parameters:")
+		for param, paramLabel := range inputs["recipes"].(map[string]interface{}) {
+			paramData[param] = ""
+			// fmt.Printf("%s ?\n", paramLabel.(string))
+			defaults, ok := defaultInputs[param]
+			if ok {
+				if len(defaults.([]string)) == 1 {
+					fmt.Printf("Default: %s\n", defaults.([]string)[0])
+					paramData[param] = defaults.([]string)[0]
+				} else {
+					fmt.Printf("Choices: %s\n", strings.Join(defaults.([]string), ","))
+				}
+			}
+			if endpointDefaultInputError == nil {
+				// fmt.Printf("has default? %s, %+v", param, endpointDefaultInputParams)
+				epDefaults, ok := endpointDefaultInputParams[param]
+				if ok {
+					if len(epDefaults) == 1 {
+						fmt.Printf("Default: %s\n", epDefaults[0])
+						paramData[param] = epDefaults[0]
+					} else {
+						fmt.Printf("Choices: %s\n", strings.Join(epDefaults, ","))
+					}
+				}
+			}
+			if paramData[param] == "" {
+				paramData[param] = promptUser(paramLabel.(string))
+			}
+		}
+		endpoints := inputs["endpoints"].(map[string]interface{})
+		endpointInputs := endpoints[endpointInfo.Name].(map[string]interface{})
+
+		fmt.Println("Endpoint parameters:")
+		for param, paramLabel := range endpointInputs {
+			paramData[param] = ""
+			// fmt.Printf("%s ?\n", paramLabel)
+			// fmt.Printf("defaults=%+v\n", endpointDefaultInputParams)
+			defaults, ok := defaultInputs[param]
+			if ok {
+				if len(defaults.([]string)) == 1 {
+					fmt.Printf("Default: %s\n", defaults.([]string)[0])
+					paramData[param] = defaults.([]string)[0]
+				} else {
+					fmt.Printf("Choices: %s\n", strings.Join(defaults.([]string), ","))
+				}
+			}
+			if endpointDefaultInputError == nil {
+				// fmt.Printf("has default? %s, %+v", param, endpointDefaultInputParams)
+				epDefaults, ok := endpointDefaultInputParams[param]
+				if ok {
+					if len(epDefaults) == 1 {
+						fmt.Printf("Default: %s\n", epDefaults[0])
+						paramData[param] = epDefaults[0]
+					} else {
+						fmt.Printf("Choices: %s\n", strings.Join(epDefaults, ","))
+					}
+				}
+			}
+			if paramData[param] == "" {
+				paramData[param] = promptUser(paramLabel.(string))
+			}
+		}
+
+	} else {
+		var runconfig RunInputs
+		cfg, err := ioutil.ReadFile(params)
+		if err != nil {
+			return "", err
+		}
+		yaml.Unmarshal([]byte(cfg), &runconfig)
+		paramData = runconfig.Params
+
+	}
+
+	if template {
+		runconfig := RunInputs{}
+		runconfig.Params = paramData
+		yamlData, _ := yaml.Marshal(runconfig)
+		fmt.Printf("\nYaml parameters template:\n%s\n", yamlData)
+		return "", nil
+	}
+
+	sensitive := make(map[string]string)
+	runInputData := terraModel.Run{Name: name, Namespace: nsID, Inputs: paramData, Endpoint: endpointID, AppID: appID, SensitiveInputs: sensitive}
+	runID, runError := runRun(options, runInputData)
+
+	return runID, runError
+}
 
 // GetRuns returns user runs
 func GetRuns(options OptionsDef, id string) ([]terraModel.Run, error) {
@@ -748,7 +1044,7 @@ func GetRuns(options OptionsDef, id string) ([]terraModel.Run, error) {
 	}
 	nsResp, nsRespErr := client.Do(nsReq)
 	if nsRespErr != nil {
-		return nil, authReqErr
+		return nil, nsRespErr
 
 	}
 	defer nsResp.Body.Close()
